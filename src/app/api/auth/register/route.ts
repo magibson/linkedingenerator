@@ -27,10 +27,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log("Checking if user exists:", username);
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
       where: { username },
     });
+    console.log("User lookup result:", existingUser);
 
     if (existingUser) {
       return NextResponse.json(
@@ -65,10 +67,13 @@ export async function POST(request: NextRequest) {
         username: user.username,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Registration error:", error);
+    console.error("Error name:", error?.name);
+    console.error("Error message:", error?.message);
+    console.error("Error stack:", error?.stack);
     return NextResponse.json(
-      { error: "Failed to create account" },
+      { error: "Failed to create account", details: error?.message },
       { status: 500 }
     );
   }

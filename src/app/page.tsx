@@ -39,11 +39,15 @@ export default function Home() {
 
   useEffect(() => {
     if (session?.user) {
-      // TODO: Load settings from database instead of localStorage
-      const stored = localStorage.getItem("linkedin-generator-settings");
-      if (stored) {
-        setSettings(JSON.parse(stored));
-      }
+      // Load settings from database
+      fetch("/api/settings")
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data.error) {
+            setSettings(data);
+          }
+        })
+        .catch((err) => console.error("Failed to load settings:", err));
     }
   }, [session]);
 
