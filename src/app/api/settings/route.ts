@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
           batchCount: 1,
           postLength: "medium",
           sourceWebsites: "[]",
-          topics: "[]",
+          audience: "young-professionals",
+          customTopics: "[]",
           schedules: "[]",
         },
       });
@@ -37,7 +38,8 @@ export async function GET(request: NextRequest) {
         postLength: newSettings.postLength,
         emailAddress: newSettings.emailAddress || "",
         sourceWebsites: JSON.parse(newSettings.sourceWebsites),
-        topics: JSON.parse(newSettings.topics),
+        audience: newSettings.audience,
+        customTopics: JSON.parse(newSettings.customTopics),
         schedules: JSON.parse(newSettings.schedules),
         writingStyle: "",
       });
@@ -57,7 +59,8 @@ export async function GET(request: NextRequest) {
       postLength: settings.postLength,
       emailAddress: settings.emailAddress || "",
       sourceWebsites: JSON.parse(settings.sourceWebsites),
-      topics: JSON.parse(settings.topics || "[]"),
+      audience: settings.audience || "young-professionals",
+      customTopics: JSON.parse(settings.customTopics || "[]"),
       schedules: JSON.parse(settings.schedules),
       writingStyle,
     });
@@ -84,7 +87,8 @@ export async function PUT(request: NextRequest) {
       postLength,
       emailAddress,
       sourceWebsites,
-      topics,
+      audience,
+      customTopics,
       schedules,
     } = body;
     
@@ -96,7 +100,8 @@ export async function PUT(request: NextRequest) {
         postLength: postLength ?? "medium",
         emailAddress: emailAddress || null,
         sourceWebsites: JSON.stringify(sourceWebsites ?? []),
-        topics: JSON.stringify(topics ?? []),
+        audience: audience ?? "young-professionals",
+        customTopics: JSON.stringify(customTopics ?? []),
         schedules: JSON.stringify(schedules ?? []),
       },
       create: {
@@ -106,7 +111,8 @@ export async function PUT(request: NextRequest) {
         postLength: postLength ?? "medium",
         emailAddress: emailAddress || null,
         sourceWebsites: JSON.stringify(sourceWebsites ?? []),
-        topics: JSON.stringify(topics ?? []),
+        audience: audience ?? "young-professionals",
+        customTopics: JSON.stringify(customTopics ?? []),
         schedules: JSON.stringify(schedules ?? []),
       },
     });
@@ -119,7 +125,8 @@ export async function PUT(request: NextRequest) {
         postLength: settings.postLength,
         emailAddress: settings.emailAddress || "",
         sourceWebsites: JSON.parse(settings.sourceWebsites),
-        topics: JSON.parse(settings.topics || "[]"),
+        audience: settings.audience,
+        customTopics: JSON.parse(settings.customTopics || "[]"),
         schedules: JSON.parse(settings.schedules),
       },
     });
