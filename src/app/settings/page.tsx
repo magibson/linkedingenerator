@@ -219,34 +219,48 @@ export default function SettingsPage() {
           <section className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
             <h2 className="text-xl font-semibold text-white mb-4">Batch Settings</h2>
             
-            <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Posts per batch
-                </label>
-                <select
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-sm font-medium text-slate-300">
+                    Posts per batch
+                  </label>
+                  <span className="text-2xl font-bold text-white">{settings.postsPerBatch}</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
                   value={settings.postsPerBatch}
                   onChange={(e) => setSettings({ ...settings, postsPerBatch: Number(e.target.value) })}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {[3, 5, 7, 10].map((n) => (
-                    <option key={n} value={n}>{n} posts</option>
-                  ))}
-                </select>
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                  <span>1</span>
+                  <span>5</span>
+                  <span>10</span>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Batches per schedule
-                </label>
-                <select
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-sm font-medium text-slate-300">
+                    Batches per schedule
+                  </label>
+                  <span className="text-2xl font-bold text-white">{settings.batchCount}</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="2"
                   value={settings.batchCount}
                   onChange={(e) => setSettings({ ...settings, batchCount: Number(e.target.value) as 1 | 2 })}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value={1}>1 batch</option>
-                  <option value={2}>2 batches</option>
-                </select>
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                  <span>1 batch</span>
+                  <span>2 batches</span>
+                </div>
               </div>
             </div>
           </section>
@@ -386,28 +400,35 @@ export default function SettingsPage() {
 
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Preferred post length
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { id: "short", label: "Short", desc: "~100 words" },
-                    { id: "medium", label: "Medium", desc: "~200 words" },
-                    { id: "long", label: "Long", desc: "~300 words" },
-                  ].map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => setSettings({ ...settings, postLength: option.id as "short" | "medium" | "long" })}
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        settings.postLength === option.id
-                          ? "bg-blue-600/20 border-blue-500 text-white"
-                          : "bg-slate-900/30 border-slate-600 text-slate-400 hover:border-slate-500"
-                      }`}
-                    >
-                      <div className="font-medium text-sm">{option.label}</div>
-                      <div className="text-xs opacity-70">{option.desc}</div>
-                    </button>
-                  ))}
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-sm font-medium text-slate-300">
+                    Preferred post length
+                  </label>
+                  <span className="text-lg font-bold text-white capitalize">
+                    {settings.postLength} 
+                    <span className="text-sm font-normal text-slate-400 ml-1">
+                      (~{settings.postLength === "short" ? "100" : settings.postLength === "medium" ? "200" : "300"} words)
+                    </span>
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="2"
+                  value={settings.postLength === "short" ? 0 : settings.postLength === "medium" ? 1 : 2}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setSettings({ 
+                      ...settings, 
+                      postLength: val === 0 ? "short" : val === 1 ? "medium" : "long" 
+                    });
+                  }}
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                  <span>Short</span>
+                  <span>Medium</span>
+                  <span>Long</span>
                 </div>
               </div>
             </div>
