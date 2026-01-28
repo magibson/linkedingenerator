@@ -48,11 +48,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     
     if (!apiKey) {
       return NextResponse.json(
-        { error: "OpenAI API key not configured" },
+        { error: "Gemini API key not configured" },
         { status: 500 }
       );
     }
@@ -63,14 +63,15 @@ ${getContentTypeInstructions(contentType)}
 
 Topic: ${topic}`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Using Google's OpenAI-compatible endpoint
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gemini-2.0-flash",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
@@ -82,7 +83,7 @@ Topic: ${topic}`;
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("OpenAI API error:", error);
+      console.error("Gemini API error:", error);
       return NextResponse.json(
         { error: "Failed to generate content" },
         { status: 500 }
