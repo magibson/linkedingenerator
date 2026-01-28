@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  email        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  settings       UserSettings?
+  writingExamples WritingExample[]
+  posts          Post[]
+  batches        Batch[]
+}
+
+model UserSettings {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  postsPerBatch   Int      @default(5)
+  batchCount      Int      @default(1)
+  postLength      String   @default("medium") // short, medium, long
+  emailAddress    String?
+  sourceWebsites  String   @default("[]") // JSON array
+  schedules       String   @default("[]") // JSON array
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model WritingExample {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  content   String
+  source    String?  // "manual" or "generated-approved"
+  createdAt DateTime @default(now())
+}
+
+model Post {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  batchId     String?
+  batch       Batch?   @relation(fields: [batchId], references: [id])
+  
+  topic       String
+  tone        String
+  contentType String
+  content     String
+  status      String   @default("draft") // draft, edited, used
+  
+  editHistory String   @default("[]") // JSON array of edits
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Batch {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  scheduledFor DateTime
+  generatedAt  DateTime?
+  sentAt       DateTime?
+  status       String   @default("scheduled") // scheduled, generating, complete, sent
+  
+  posts        Post[]
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
