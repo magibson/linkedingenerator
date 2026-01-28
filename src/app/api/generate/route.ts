@@ -42,7 +42,7 @@ const getContentTypeInstructions = (contentType: string) => {
 
 export async function POST(request: NextRequest) {
   try {
-    const { topic, tone, contentType } = await request.json();
+    const { topic, tone, contentType, writingStyle, postLength } = await request.json();
 
     if (!topic) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 });
@@ -57,9 +57,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const getLengthInstructions = (length: string) => {
+      switch (length) {
+        case "short": return "Keep it concise, around 100 words.";
+        case "long": return "Make it comprehensive, around 300 words.";
+        default: return "Aim for around 200 words.";
+      }
+    };
+
+    const styleNote = writingStyle 
+      ? `\n\nMatch this writing style:\n${writingStyle}`
+      : "";
+
     const userPrompt = `${getToneInstructions(tone)}
 
 ${getContentTypeInstructions(contentType)}
+
+${getLengthInstructions(postLength)}
+
+Target audience: New York Life financial advisors
+${styleNote}
 
 Topic: ${topic}`;
 
