@@ -247,23 +247,30 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <div className="flex justify-between items-center mb-3">
-                  <label className="text-sm font-medium text-slate-300">
-                    Batches per schedule
-                  </label>
-                  <span className="text-2xl font-bold text-white">{settings.batchCount}</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="2"
-                  value={settings.batchCount}
-                  onChange={(e) => setSettings({ ...settings, batchCount: Number(e.target.value) as 1 | 2 })}
-                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-                <div className="flex justify-between text-xs text-slate-500 mt-1">
-                  <span>1 batch</span>
-                  <span>2 batches</span>
+                <label className="text-sm font-medium text-slate-300 block mb-3">
+                  Batches per schedule
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setSettings({ ...settings, batchCount: 1 })}
+                    className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
+                      settings.batchCount === 1
+                        ? "bg-blue-600 text-white"
+                        : "bg-slate-900/50 text-slate-400 border border-slate-600 hover:border-slate-500"
+                    }`}
+                  >
+                    1 Batch
+                  </button>
+                  <button
+                    onClick={() => setSettings({ ...settings, batchCount: 2 })}
+                    className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
+                      settings.batchCount === 2
+                        ? "bg-blue-600 text-white"
+                        : "bg-slate-900/50 text-slate-400 border border-slate-600 hover:border-slate-500"
+                    }`}
+                  >
+                    2 Batches
+                  </button>
                 </div>
               </div>
             </div>
@@ -427,12 +434,17 @@ export default function SettingsPage() {
             {/* Show topics for selected audience */}
             {settings.audience && settings.audience !== "custom" && (
               <div className="bg-slate-900/30 rounded-xl p-4">
-                <p className="text-slate-400 text-xs mb-2">Topics for {AUDIENCES.find(a => a.id === settings.audience)?.label}:</p>
+                <p className="text-slate-400 text-xs mb-2">
+                  <svg className="w-4 h-4 inline mr-1 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Content will focus on these topics:
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {AUDIENCES.find(a => a.id === settings.audience)?.topics.map((topic) => (
                     <span
                       key={topic}
-                      className="px-3 py-1 bg-blue-600/20 border border-blue-500/30 text-blue-200 text-sm rounded-lg capitalize"
+                      className="px-3 py-1.5 bg-slate-800 text-slate-300 text-sm rounded-full capitalize"
                     >
                       {topic}
                     </span>
