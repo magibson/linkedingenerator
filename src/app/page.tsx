@@ -1,65 +1,189 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+
+const tones = [
+  { id: "professional", label: "Professional", desc: "Polished and business-focused" },
+  { id: "thought-leader", label: "Thought Leader", desc: "Insightful and authoritative" },
+  { id: "storytelling", label: "Storytelling", desc: "Personal narrative style" },
+  { id: "casual", label: "Casual", desc: "Friendly and conversational" },
+];
+
+const contentTypes = [
+  { id: "post", label: "Full Post", desc: "Complete LinkedIn post" },
+  { id: "hook", label: "Hook Only", desc: "Attention-grabbing opener" },
+  { id: "carousel-outline", label: "Carousel Outline", desc: "Slide-by-slide breakdown" },
+];
 
 export default function Home() {
+  const [topic, setTopic] = useState("");
+  const [tone, setTone] = useState("professional");
+  const [contentType, setContentType] = useState("post");
+  const [output, setOutput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleGenerate = async () => {
+    if (!topic.trim()) return;
+    
+    setLoading(true);
+    setOutput("");
+    
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic, tone, contentType }),
+      });
+      
+      const data = await res.json();
+      setOutput(data.content || "Error generating content");
+    } catch (err) {
+      setOutput("Failed to generate content. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(output);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <div className="max-w-4xl mx-auto px-6 py-12">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-white mb-3">
+            LinkedIn Content Generator
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-slate-400 text-lg">
+            Create engaging LinkedIn posts in seconds
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        {/* Main Card */}
+        <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-2xl p-8 shadow-2xl">
+          {/* Topic Input */}
+          <div className="mb-8">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              What do you want to post about?
+            </label>
+            <textarea
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="e.g., The importance of building genuine relationships in sales, not just chasing numbers..."
+              className="w-full h-32 px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </div>
+
+          {/* Tone Selection */}
+          <div className="mb-8">
+            <label className="block text-sm font-medium text-slate-300 mb-3">
+              Tone
+            </label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {tones.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTone(t.id)}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    tone === t.id
+                      ? "bg-blue-600/20 border-blue-500 text-white"
+                      : "bg-slate-900/30 border-slate-600 text-slate-400 hover:border-slate-500"
+                  }`}
+                >
+                  <div className="font-medium text-sm">{t.label}</div>
+                  <div className="text-xs opacity-70 mt-1">{t.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content Type Selection */}
+          <div className="mb-8">
+            <label className="block text-sm font-medium text-slate-300 mb-3">
+              Content Type
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {contentTypes.map((ct) => (
+                <button
+                  key={ct.id}
+                  onClick={() => setContentType(ct.id)}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    contentType === ct.id
+                      ? "bg-blue-600/20 border-blue-500 text-white"
+                      : "bg-slate-900/30 border-slate-600 text-slate-400 hover:border-slate-500"
+                  }`}
+                >
+                  <div className="font-medium text-sm">{ct.label}</div>
+                  <div className="text-xs opacity-70 mt-1">{ct.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Generate Button */}
+          <button
+            onClick={handleGenerate}
+            disabled={loading || !topic.trim()}
+            className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
           >
-            Documentation
-          </a>
+            {loading ? (
+              <>
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Generating...
+              </>
+            ) : (
+              "Generate Content"
+            )}
+          </button>
         </div>
-      </main>
+
+        {/* Output Section */}
+        {output && (
+          <div className="mt-8 bg-slate-800/50 backdrop-blur border border-slate-700 rounded-2xl p-8 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white">Generated Content</h2>
+              <button
+                onClick={handleCopy}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
+              >
+                {copied ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Copy
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-600">
+              <pre className="whitespace-pre-wrap text-slate-200 font-sans leading-relaxed">
+                {output}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="text-center mt-12 text-slate-500 text-sm">
+          Built for creating engaging LinkedIn content
+        </div>
+      </div>
     </div>
   );
 }
