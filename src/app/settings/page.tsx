@@ -332,6 +332,36 @@ export default function SettingsPage() {
               </div>
             )}
 
+            {/* Suggested sources */}
+            <div className="mb-4">
+              <p className="text-slate-500 text-xs mb-2">Popular financial news sources:</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { name: "Kiplinger", url: "https://www.kiplinger.com" },
+                  { name: "Yahoo Finance", url: "https://finance.yahoo.com" },
+                  { name: "CNBC", url: "https://www.cnbc.com" },
+                  { name: "Barchart", url: "https://www.barchart.com" },
+                  { name: "MarketWatch", url: "https://www.marketwatch.com" },
+                  { name: "Bloomberg", url: "https://www.bloomberg.com" },
+                  { name: "Reuters", url: "https://www.reuters.com" },
+                  { name: "Investopedia", url: "https://www.investopedia.com" },
+                  { name: "Financial Times", url: "https://www.ft.com" },
+                  { name: "The Motley Fool", url: "https://www.fool.com" },
+                ].filter(s => !settings.sourceWebsites.includes(s.url)).map((source) => (
+                  <button
+                    key={source.url}
+                    onClick={() => setSettings({ 
+                      ...settings, 
+                      sourceWebsites: [...settings.sourceWebsites, source.url] 
+                    })}
+                    className="px-3 py-1.5 bg-slate-700/50 hover:bg-blue-600/30 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-white text-sm rounded-lg transition-all"
+                  >
+                    + {source.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Add new website */}
             <div className="flex gap-3">
               <input
