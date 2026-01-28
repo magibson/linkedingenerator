@@ -30,6 +30,7 @@ model UserSettings {
   postLength      String   @default("medium") // short, medium, long
   emailAddress    String?
   sourceWebsites  String   @default("[]") // JSON array
+  topics          String   @default("[]") // JSON array of topic keywords to focus on
   schedules       String   @default("[]") // JSON array
   
   createdAt       DateTime @default(now())

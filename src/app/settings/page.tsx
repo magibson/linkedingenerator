@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [newSchedule, setNewSchedule] = useState({ date: "", time: "" });
   const [newWebsite, setNewWebsite] = useState("");
+  const [newTopic, setNewTopic] = useState("");
   const [newExample, setNewExample] = useState("");
   const [addingExample, setAddingExample] = useState(false);
 
@@ -51,6 +52,7 @@ export default function SettingsPage() {
           postLength: data.postLength,
           emailAddress: data.emailAddress,
           sourceWebsites: data.sourceWebsites,
+          topics: data.topics || [],
           schedules: data.schedules,
           writingStyle: data.writingStyle || "",
         });
@@ -88,6 +90,7 @@ export default function SettingsPage() {
           postLength: settings.postLength,
           emailAddress: settings.emailAddress,
           sourceWebsites: settings.sourceWebsites,
+          topics: settings.topics,
           schedules: settings.schedules,
         }),
       });
@@ -139,6 +142,25 @@ export default function SettingsPage() {
     setSettings({
       ...settings,
       sourceWebsites: settings.sourceWebsites.filter((w) => w !== url),
+    });
+  };
+
+  const addTopic = () => {
+    if (!newTopic.trim()) return;
+    const topic = newTopic.trim().toLowerCase();
+    if (!settings.topics.includes(topic)) {
+      setSettings({
+        ...settings,
+        topics: [...settings.topics, topic],
+      });
+    }
+    setNewTopic("");
+  };
+
+  const removeTopic = (topic: string) => {
+    setSettings({
+      ...settings,
+      topics: settings.topics.filter((t) => t !== topic),
     });
   };
 
@@ -387,6 +409,84 @@ export default function SettingsPage() {
               />
               <button
                 onClick={addWebsite}
+                className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          </section>
+
+          {/* Topics */}
+          <section className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+            <h2 className="text-xl font-semibold text-white mb-4">Topics to Focus On</h2>
+            <p className="text-slate-400 text-sm mb-4">Content will be curated from the last 7 days based on these topics</p>
+
+            {/* Existing topics */}
+            {settings.topics.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {settings.topics.map((topic) => (
+                  <div
+                    key={topic}
+                    className="flex items-center gap-2 bg-blue-600/20 border border-blue-500/50 px-3 py-2 rounded-lg"
+                  >
+                    <span className="text-blue-200 text-sm capitalize">{topic}</span>
+                    <button
+                      onClick={() => removeTopic(topic)}
+                      className="text-blue-400 hover:text-red-400 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Suggested topics */}
+            <div className="mb-4">
+              <p className="text-slate-500 text-xs mb-2">Popular topics for financial advisors:</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "retirement planning",
+                  "tax strategies",
+                  "market updates",
+                  "estate planning",
+                  "social security",
+                  "401k",
+                  "wealth management",
+                  "insurance",
+                  "investment strategies",
+                  "financial planning",
+                  "economic outlook",
+                  "interest rates",
+                ].filter(t => !settings.topics.includes(t)).map((topic) => (
+                  <button
+                    key={topic}
+                    onClick={() => setSettings({ 
+                      ...settings, 
+                      topics: [...settings.topics, topic] 
+                    })}
+                    className="px-3 py-1.5 bg-slate-700/50 hover:bg-blue-600/30 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-white text-sm rounded-lg transition-all capitalize"
+                  >
+                    + {topic}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Add new topic */}
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={newTopic}
+                onChange={(e) => setNewTopic(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addTopic()}
+                placeholder="e.g., market volatility"
+                className="flex-1 px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={addTopic}
                 className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
               >
                 Add

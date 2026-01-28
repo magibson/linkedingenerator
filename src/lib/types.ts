@@ -3,6 +3,7 @@ export interface UserSettings {
   batchCount: 1 | 2;
   schedules: BatchSchedule[];
   sourceWebsites: string[];
+  topics: string[]; // Topics to focus on for content curation
   writingStyle: string;
   postLength: "short" | "medium" | "long";
   emailAddress: string;
@@ -44,6 +45,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   batchCount: 1,
   schedules: [],
   sourceWebsites: [],
+  topics: [],
   writingStyle: "",
   postLength: "medium",
   emailAddress: "",
