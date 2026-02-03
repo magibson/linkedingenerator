@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { Post } from "@prisma/client";
 import {
   generateDigestEmailHtml,
   generateSinglePostEmailHtml,
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
     // If no posts exist, create sample data for preview
     const postsForEmail: PostForEmail[] =
       posts.length > 0
-        ? posts.map((post) => ({
+        ? posts.map((post: Post) => ({
             id: post.id,
             topic: post.topic,
             content: post.content,
