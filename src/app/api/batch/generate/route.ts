@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
       where: { userId },
       orderBy: { createdAt: "desc" },
     });
-    const writingStyle = writingExamples.map((e) => e.content).join("\n\n---\n\n");
+    const writingStyle = writingExamples.map((e: { content: string }) => e.content).join("\n\n---\n\n");
 
     const postsToGenerate = count || settings.postsPerBatch;
     const postLength = settings.postLength;
