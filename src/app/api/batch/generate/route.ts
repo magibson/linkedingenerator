@@ -328,7 +328,7 @@ export async function POST(request: NextRequest) {
     // Save posts to database (with source article info)
     // Append article URL to content so it's included when copying
     const savedPosts = await Promise.all(
-      generatedPosts.map((post) => {
+      generatedPosts.map((post: { topic: string; tone: string; content: string; sourceArticle: CuratedArticle }) => {
         const contentWithLink = `${post.content}\n\n${post.sourceArticle.url}`;
         return prisma.post.create({
           data: {
@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
         select: { firstName: true, email: true },
       });
 
-      const postsForEmail: PostForEmail[] = savedPosts.map((post) => ({
+      const postsForEmail: PostForEmail[] = savedPosts.map((post: { id: string; topic: string; content: string; tone: string; contentType: string }) => ({
         id: post.id,
         topic: post.topic,
         content: post.content,
@@ -398,7 +398,7 @@ export async function POST(request: NextRequest) {
         id: batch.id,
         status: emailResult?.success ? "sent" : "complete",
       },
-      posts: savedPosts.map((p, i) => ({
+      posts: savedPosts.map((p: { id: string; topic: string; tone: string; content: string }, i: number) => ({
         id: p.id,
         topic: p.topic,
         tone: p.tone,
