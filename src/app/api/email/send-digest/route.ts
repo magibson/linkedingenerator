@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     // Get user name for email greeting
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { username: true },
+      select: { firstName: true, email: true },
     });
 
     // Format posts for email
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     // Send the email
     const result = await sendDigestEmail({
       to: settings.emailAddress,
-      userName: user?.username || "there",
+      userName: user?.firstName || user?.email?.split("@")[0] || "there",
       posts: postsForEmail,
       batchId,
       baseUrl: baseUrl || "",

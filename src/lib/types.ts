@@ -85,6 +85,7 @@ export interface UserSettings {
   writingStyle: string;
   postLength: "short" | "medium" | "long";
   emailAddress: string;
+  aiInstructions: string; // Custom instructions for AI (e.g., "no emojis")
 }
 
 export interface BatchSchedule {
@@ -128,6 +129,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   writingStyle: "",
   postLength: "medium",
   emailAddress: "",
+  aiInstructions: "",
 };
 
 // Helper to get topics for an audience

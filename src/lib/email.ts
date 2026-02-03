@@ -42,36 +42,42 @@ export function isEmailConfigured(): boolean {
 }
 
 /**
+ * Capitalize first letter of name
+ */
+function capitalizeName(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+}
+
+/**
+ * Generate a short punchy greeting for financial advisors
+ */
+function generateGreeting(userName: string): string {
+  const name = capitalizeName(userName);
+  const greetings = [
+    `${name}, your "authentic thought leadership" is ready.`,
+    `Fresh content for the LinkedIn grind, ${name}.`,
+    `${name}! Time to out-post your competition.`,
+    `Your ghost-written genius awaits, ${name}.`,
+    `${name}, prospects are scrolling. Let's hook 'em.`,
+    `Content's hot, ${name}. Your future clients will love it.`,
+    `${name}! More posts to build that book of business.`,
+    `${name}, the algorithm demands content. We delivered.`,
+    `Your LinkedIn presence called, ${name}. It wants more posts.`,
+    `${name}! Ready to look like a thought leader again?`,
+    `Fresh posts, ${name}. Time to impress some prospects.`,
+    `${name}, your AI ghostwriter has finished. You're welcome.`,
+  ];
+  return greetings[Math.floor(Math.random() * greetings.length)];
+}
+
+/**
  * Generate HTML for post digest email
  */
 export function generateDigestEmailHtml(options: DigestEmailOptions): string {
-  const { userName = "there", posts, baseUrl = "" } = options;
+  const { userName = "there", posts, batchId, baseUrl = "" } = options;
 
-  const postsHtml = posts
-    .map(
-      (post, index) => `
-      <div style="margin-bottom: 32px; padding: 24px; background-color: #f8fafc; border-radius: 12px; border-left: 4px solid #3b82f6;">
-        <div style="margin-bottom: 12px;">
-          <span style="display: inline-block; padding: 4px 12px; background-color: #e0e7ff; color: #4338ca; border-radius: 9999px; font-size: 12px; font-weight: 600; text-transform: uppercase;">
-            Post ${index + 1}
-          </span>
-          ${post.topic ? `<span style="margin-left: 8px; color: #64748b; font-size: 14px;">Topic: ${escapeHtml(post.topic)}</span>` : ""}
-        </div>
-        <div style="white-space: pre-wrap; line-height: 1.6; color: #1e293b; font-size: 15px; margin-bottom: 16px;">
-${escapeHtml(truncateContent(post.content, 500))}
-        </div>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-          <a href="${baseUrl}/posts/${post.id}/edit" style="display: inline-block; padding: 10px 20px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: 500; font-size: 14px;">
-            ✏️ Edit in App
-          </a>
-          <span style="display: inline-flex; align-items: center; padding: 10px 16px; background-color: #e2e8f0; color: #475569; border-radius: 8px; font-size: 14px;">
-            📋 Copy from app
-          </span>
-        </div>
-      </div>
-    `
-    )
-    .join("");
+  const greeting = generateGreeting(userName);
+  const viewUrl = batchId ? `${baseUrl}/posts?batch=${batchId}` : `${baseUrl}/posts`;
 
   return `
 <!DOCTYPE html>
@@ -81,46 +87,48 @@ ${escapeHtml(truncateContent(post.content, 500))}
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Your LinkedIn Posts Are Ready!</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-    <!-- Header -->
+<body style="margin: 0; padding: 0; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <div style="max-width: 480px; margin: 0 auto; padding: 48px 24px;">
+    
+    <!-- Logo/Brand -->
     <div style="text-align: center; margin-bottom: 32px;">
-      <div style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); border-radius: 12px;">
-        <span style="color: white; font-size: 24px; font-weight: bold;">LinkedIn Content Generator</span>
-      </div>
+      <span style="color: #3b82f6; font-size: 14px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">LinkedIn Content Generator</span>
     </div>
 
     <!-- Main Card -->
-    <div style="background-color: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-      <h1 style="margin: 0 0 8px 0; color: #0f172a; font-size: 28px; font-weight: 700;">
-        Hey ${escapeHtml(userName)}! 👋
+    <div style="background: linear-gradient(145deg, #1e293b 0%, #334155 100%); border-radius: 20px; padding: 48px 32px; text-align: center; border: 1px solid #475569;">
+      
+      <!-- Post Count Badge -->
+      <div style="margin-bottom: 24px;">
+        <span style="display: inline-block; padding: 8px 20px; background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); color: white; border-radius: 24px; font-size: 14px; font-weight: 600;">
+          ${posts.length} New Post${posts.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      <!-- Greeting -->
+      <h1 style="margin: 0 0 12px 0; color: #f8fafc; font-size: 24px; font-weight: 700; line-height: 1.3;">
+        ${escapeHtml(greeting)}
       </h1>
-      <p style="margin: 0 0 24px 0; color: #64748b; font-size: 16px; line-height: 1.5;">
-        Your ${posts.length} LinkedIn post${posts.length !== 1 ? "s are" : " is"} ready for review. 
-        Each one is crafted to engage your audience and establish your expertise.
+
+      <!-- Subtext -->
+      <p style="margin: 0 0 32px 0; color: #94a3b8; font-size: 15px; line-height: 1.5;">
+        Your content is ready for review.
       </p>
 
-      <div style="border-top: 1px solid #e2e8f0; padding-top: 24px;">
-        ${postsHtml}
-      </div>
+      <!-- CTA Button -->
+      <a href="${viewUrl}" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%); color: white; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);">
+        View Posts →
+      </a>
 
-      <!-- CTA -->
-      <div style="text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
-        <a href="${baseUrl}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); color: white; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 16px;">
-          View All Posts in App →
-        </a>
-      </div>
     </div>
 
     <!-- Footer -->
-    <div style="text-align: center; margin-top: 32px; padding: 0 20px;">
-      <p style="color: #94a3b8; font-size: 14px; margin: 0 0 8px 0;">
-        You're receiving this because you enabled email notifications.
-      </p>
-      <a href="${baseUrl}/settings" style="color: #64748b; font-size: 14px;">
-        Manage email preferences
+    <div style="text-align: center; margin-top: 32px;">
+      <a href="${baseUrl}/settings" style="color: #64748b; font-size: 13px; text-decoration: none;">
+        Manage notifications
       </a>
     </div>
+
   </div>
 </body>
 </html>
@@ -133,6 +141,8 @@ ${escapeHtml(truncateContent(post.content, 500))}
 export function generateSinglePostEmailHtml(options: SinglePostEmailOptions): string {
   const { userName = "there", post, baseUrl = "" } = options;
 
+  const greeting = generateGreeting(userName);
+
   return `
 <!DOCTYPE html>
 <html>
@@ -141,57 +151,48 @@ export function generateSinglePostEmailHtml(options: SinglePostEmailOptions): st
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Your LinkedIn Post Is Ready!</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-    <!-- Header -->
+<body style="margin: 0; padding: 0; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <div style="max-width: 480px; margin: 0 auto; padding: 48px 24px;">
+    
+    <!-- Logo/Brand -->
     <div style="text-align: center; margin-bottom: 32px;">
-      <div style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); border-radius: 12px;">
-        <span style="color: white; font-size: 24px; font-weight: bold;">LinkedIn Content Generator</span>
-      </div>
+      <span style="color: #3b82f6; font-size: 14px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">LinkedIn Content Generator</span>
     </div>
 
     <!-- Main Card -->
-    <div style="background-color: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-      <h1 style="margin: 0 0 8px 0; color: #0f172a; font-size: 28px; font-weight: 700;">
-        Your Post is Ready! ✨
+    <div style="background: linear-gradient(145deg, #1e293b 0%, #334155 100%); border-radius: 20px; padding: 48px 32px; text-align: center; border: 1px solid #475569;">
+      
+      <!-- Post Count Badge -->
+      <div style="margin-bottom: 24px;">
+        <span style="display: inline-block; padding: 8px 20px; background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); color: white; border-radius: 24px; font-size: 14px; font-weight: 600;">
+          New Post
+        </span>
+      </div>
+
+      <!-- Greeting -->
+      <h1 style="margin: 0 0 12px 0; color: #f8fafc; font-size: 24px; font-weight: 700; line-height: 1.3;">
+        ${escapeHtml(greeting)}
       </h1>
-      <p style="margin: 0 0 24px 0; color: #64748b; font-size: 16px; line-height: 1.5;">
-        Hey ${escapeHtml(userName)}, here's your freshly generated LinkedIn post.
+
+      <!-- Subtext -->
+      <p style="margin: 0 0 32px 0; color: #94a3b8; font-size: 15px; line-height: 1.5;">
+        Your content is ready for review.
       </p>
 
-      <!-- Post -->
-      <div style="padding: 24px; background-color: #f8fafc; border-radius: 12px; border-left: 4px solid #3b82f6;">
-        ${post.topic ? `<div style="margin-bottom: 12px; color: #64748b; font-size: 14px;">Topic: ${escapeHtml(post.topic)}</div>` : ""}
-        <div style="white-space: pre-wrap; line-height: 1.6; color: #1e293b; font-size: 15px; margin-bottom: 20px;">
-${escapeHtml(post.content)}
-        </div>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-          <a href="${baseUrl}/posts/${post.id}/edit" style="display: inline-block; padding: 10px 20px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: 500; font-size: 14px;">
-            ✏️ Edit Post
-          </a>
-          <span style="display: inline-flex; align-items: center; padding: 10px 16px; background-color: #e2e8f0; color: #475569; border-radius: 8px; font-size: 14px;">
-            📋 Copy from app
-          </span>
-        </div>
-      </div>
+      <!-- CTA Button -->
+      <a href="${baseUrl}/posts/${post.id}" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%); color: white; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);">
+        View Post →
+      </a>
 
-      <!-- CTA -->
-      <div style="text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
-        <a href="${baseUrl}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); color: white; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 16px;">
-          Open in App →
-        </a>
-      </div>
     </div>
 
     <!-- Footer -->
-    <div style="text-align: center; margin-top: 32px; padding: 0 20px;">
-      <p style="color: #94a3b8; font-size: 14px; margin: 0 0 8px 0;">
-        You're receiving this because you enabled email notifications.
-      </p>
-      <a href="${baseUrl}/settings" style="color: #64748b; font-size: 14px;">
-        Manage email preferences
+    <div style="text-align: center; margin-top: 32px;">
+      <a href="${baseUrl}/settings" style="color: #64748b; font-size: 13px; text-decoration: none;">
+        Manage notifications
       </a>
     </div>
+
   </div>
 </body>
 </html>

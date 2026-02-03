@@ -8,16 +8,17 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        username: { label: "Username", type: "text" },
+        email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        rememberMe: { label: "Remember Me", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.username || !credentials?.password) {
+        if (!credentials?.email || !credentials?.password) {
           return null;
         }
 
         const user = await prisma.user.findUnique({
-          where: { username: credentials.username },
+          where: { email: credentials.email.toLowerCase() },
         });
 
         if (!user) {
@@ -32,8 +33,9 @@ export const authOptions: NextAuthOptions = {
 
         return {
           id: user.id,
-          name: user.username,
+          name: user.firstName || user.email,
           email: user.email,
+          rememberMe: credentials.rememberMe === "true",
         };
       },
     }),
@@ -48,6 +50,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.rememberMe = (user as any).rememberMe;
       }
       return token;
     },
@@ -57,5 +60,8 @@ export const authOptions: NextAuthOptions = {
       }
       return session;
     },
+  },
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60, // 30 days for remember me (default)
   },
 };

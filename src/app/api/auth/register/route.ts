@@ -4,18 +4,25 @@ import bcrypt from "bcryptjs";
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, password, email } = await request.json();
+    const { password, email, firstName } = await request.json();
 
-    if (!username || !password) {
+    if (!email || !email.trim()) {
       return NextResponse.json(
-        { error: "Username and password are required" },
+        { error: "Email is required" },
         { status: 400 }
       );
     }
 
-    if (username.length < 3) {
+    if (!password) {
       return NextResponse.json(
-        { error: "Username must be at least 3 characters" },
+        { error: "Password is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!firstName || !firstName.trim()) {
+      return NextResponse.json(
+        { error: "First name is required" },
         { status: 400 }
       );
     }
@@ -27,16 +34,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("Checking if user exists:", username);
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Restrict to allowed email domains
+    const allowedDomains = ["ft.newyorklife.com"];
+    const emailDomain = normalizedEmail.split("@")[1];
+    
+    if (!emailDomain || !allowedDomains.includes(emailDomain)) {
+      return NextResponse.json(
+        { error: "Registration is restricted to New York Life employees (@ft.newyorklife.com)" },
+        { status: 400 }
+      );
+    }
+
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
-      where: { username },
+      where: { email: normalizedEmail },
     });
-    console.log("User lookup result:", existingUser);
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "Username already taken" },
+        { error: "An account with this email already exists" },
         { status: 400 }
       );
     }
@@ -47,14 +65,15 @@ export async function POST(request: NextRequest) {
     // Create user with default settings
     const user = await prisma.user.create({
       data: {
-        username,
+        email: normalizedEmail,
         passwordHash,
-        email: email || null,
+        firstName: firstName?.trim() || null,
         settings: {
           create: {
             postsPerBatch: 5,
             batchCount: 1,
             postLength: "medium",
+            emailAddress: normalizedEmail,
           },
         },
       },
@@ -64,7 +83,7 @@ export async function POST(request: NextRequest) {
       success: true,
       user: {
         id: user.id,
-        username: user.username,
+        email: user.email,
       },
     });
   } catch (error: any) {

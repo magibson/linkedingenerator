@@ -13,6 +13,12 @@ export async function GET(request: NextRequest) {
     
     const userId = (session.user as any).id;
     
+    // Get user info (firstName, email)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, email: true },
+    });
+    
     const settings = await prisma.userSettings.findUnique({
       where: { userId },
     });
@@ -29,6 +35,7 @@ export async function GET(request: NextRequest) {
           audience: "young-professionals",
           customTopics: "[]",
           schedules: "[]",
+          emailAddress: user?.email || null,
         },
       });
       
@@ -36,12 +43,14 @@ export async function GET(request: NextRequest) {
         postsPerBatch: newSettings.postsPerBatch,
         batchCount: newSettings.batchCount,
         postLength: newSettings.postLength,
-        emailAddress: newSettings.emailAddress || "",
+        emailAddress: newSettings.emailAddress || user?.email || "",
         sourceWebsites: JSON.parse(newSettings.sourceWebsites),
         audience: newSettings.audience,
         customTopics: JSON.parse(newSettings.customTopics),
         schedules: JSON.parse(newSettings.schedules),
         writingStyle: "",
+        firstName: user?.firstName || "",
+        userEmail: user?.email || "",
       });
     }
     
@@ -57,12 +66,15 @@ export async function GET(request: NextRequest) {
       postsPerBatch: settings.postsPerBatch,
       batchCount: settings.batchCount,
       postLength: settings.postLength,
-      emailAddress: settings.emailAddress || "",
+      emailAddress: settings.emailAddress || user?.email || "",
       sourceWebsites: JSON.parse(settings.sourceWebsites),
       audience: settings.audience || "young-professionals",
       customTopics: JSON.parse(settings.customTopics || "[]"),
       schedules: JSON.parse(settings.schedules),
+      aiInstructions: settings.aiInstructions || "",
       writingStyle,
+      firstName: user?.firstName || "",
+      userEmail: user?.email || "",
     });
   } catch (error) {
     console.error("Settings GET error:", error);
@@ -90,6 +102,7 @@ export async function PUT(request: NextRequest) {
       audience,
       customTopics,
       schedules,
+      aiInstructions,
     } = body;
     
     const settings = await prisma.userSettings.upsert({
@@ -103,6 +116,7 @@ export async function PUT(request: NextRequest) {
         audience: audience ?? "young-professionals",
         customTopics: JSON.stringify(customTopics ?? []),
         schedules: JSON.stringify(schedules ?? []),
+        aiInstructions: aiInstructions ?? "",
       },
       create: {
         userId,
@@ -114,6 +128,7 @@ export async function PUT(request: NextRequest) {
         audience: audience ?? "young-professionals",
         customTopics: JSON.stringify(customTopics ?? []),
         schedules: JSON.stringify(schedules ?? []),
+        aiInstructions: aiInstructions ?? "",
       },
     });
     

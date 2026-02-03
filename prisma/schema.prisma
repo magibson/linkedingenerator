@@ -3,14 +3,14 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model User {
   id           String   @id @default(cuid())
-  username     String   @unique
+  email        String   @unique
   passwordHash String
-  email        String?
+  firstName    String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -33,6 +33,7 @@ model UserSettings {
   audience        String   @default("young-professionals") // audience type
   customTopics    String   @default("[]") // JSON array, only used when audience is "custom"
   schedules       String   @default("[]") // JSON array
+  aiInstructions  String   @default("") // Custom instructions for AI (e.g., "no emojis")
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -60,6 +61,12 @@ model Post {
   contentType String
   content     String
   status      String   @default("draft") // draft, edited, used
+  
+  // Source article info (from curated articles)
+  sourceArticleUrl   String?
+  sourceArticleTitle String?
+  sourceArticleImage String?
+  audience           String?
   
   editHistory String   @default("[]") // JSON array of edits
   

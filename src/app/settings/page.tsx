@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { UserSettings, BatchSchedule, DEFAULT_SETTINGS, AUDIENCES, AudienceType } from "@/lib/types";
+import { UserSettings, DEFAULT_SETTINGS, AUDIENCES } from "@/lib/types";
 
 interface WritingExample {
   id: string;
@@ -13,19 +13,280 @@ interface WritingExample {
   createdAt: string;
 }
 
+interface UsageInfo {
+  used: number;
+  limit: number;
+  remaining: number;
+  resetsAt: string;
+}
+
+// Debounce hook for auto-save
+function useDebouncedSave(callback: () => Promise<void>, delay: number) {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  const debouncedSave = useCallback(() => {
+    setSaveStatus('saving');
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(async () => {
+      try {
+        await callback();
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch (error) {
+        setSaveStatus('error');
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      }
+    }, delay);
+  }, [callback, delay]);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  return { debouncedSave, saveStatus };
+}
+
+// Typewriter effect component
+function TypeWriter({ text, speed = 30 }: { text: string; speed?: number }) {
+  const [displayedText, setDisplayedText] = useState("");
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    setDisplayedText("");
+    setIsComplete(false);
+    let index = 0;
+    const timer = setInterval(() => {
+      if (index < text.length) {
+        setDisplayedText(text.slice(0, index + 1));
+        index++;
+      } else {
+        setIsComplete(true);
+        clearInterval(timer);
+      }
+    }, speed);
+
+    return () => clearInterval(timer);
+  }, [text, speed]);
+
+  return (
+    <span>
+      {displayedText}
+      {!isComplete && <span className="animate-pulse">|</span>}
+    </span>
+  );
+}
+
+// Auto-save indicator component
+function SaveIndicator({ status }: { status: 'idle' | 'saving' | 'saved' | 'error' }) {
+  if (status === 'idle') return null;
+  
+  return (
+    <div className={`fixed bottom-6 right-6 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg transition-all duration-300 ${
+      status === 'saving' ? 'bg-slate-700 text-slate-300' :
+      status === 'saved' ? 'bg-green-600/90 text-white' :
+      'bg-red-600/90 text-white'
+    }`}>
+      {status === 'saving' && (
+        <>
+          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <span className="text-sm">Saving...</span>
+        </>
+      )}
+      {status === 'saved' && (
+        <>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <span className="text-sm">Saved</span>
+        </>
+      )}
+      {status === 'error' && (
+        <>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          <span className="text-sm">Save failed</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Segmented control for discrete values
+function SegmentedControl({
+  value,
+  onChange,
+  options,
+  label,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  options: number[];
+  label: string;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const getValueFromPosition = (clientX: number) => {
+    if (!containerRef.current) return value;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const percentage = Math.max(0, Math.min(1, x / rect.width));
+    const index = Math.round(percentage * (options.length - 1));
+    return options[index];
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    onChange(getValueFromPosition(e.clientX));
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging) {
+      onChange(getValueFromPosition(e.clientX));
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const selectedIndex = options.indexOf(value);
+  const selectorWidth = 100 / options.length;
+  const selectorLeft = selectedIndex * selectorWidth;
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-3">
+        <label className="text-sm font-medium text-slate-300">{label}</label>
+        <span className="text-2xl font-bold text-white">{value}</span>
+      </div>
+      <div 
+        ref={containerRef}
+        className="relative bg-slate-900/50 p-1 rounded-xl select-none cursor-pointer"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+      >
+        <div 
+          className="absolute top-1 bottom-1 bg-blue-600 rounded-lg"
+          style={{
+            width: `calc(${selectorWidth}% - 4px)`,
+            left: `calc(${selectorLeft}% + 2px)`,
+            transform: isDragging ? 'scale(1.15)' : 'scale(1)',
+            transition: isDragging ? 'left 0.05s ease-out, transform 0.1s' : 'left 0.15s ease-out, transform 0.15s',
+          }}
+        />
+        <div className="relative flex">
+          {options.map((opt) => (
+            <div
+              key={opt}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg text-center pointer-events-none z-10 transition-colors ${
+                value === opt ? 'text-white' : 'text-slate-400'
+              }`}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Usage meter component
+function UsageMeter({ usage }: { usage: UsageInfo }) {
+  const percentage = (usage.used / usage.limit) * 100;
+  const isLow = usage.remaining <= 5;
+  const isEmpty = usage.remaining === 0;
+  
+  return (
+    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-sm text-slate-400">Weekly Usage</span>
+        <span className={`text-sm font-medium ${isEmpty ? 'text-red-400' : isLow ? 'text-yellow-400' : 'text-slate-300'}`}>
+          {usage.remaining} posts remaining
+        </span>
+      </div>
+      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+        <div 
+          className={`h-full transition-all duration-500 ${
+            isEmpty ? 'bg-red-500' : isLow ? 'bg-yellow-500' : 'bg-blue-500'
+          }`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <div className="flex justify-between items-center mt-2">
+        <span className="text-xs text-slate-500">{usage.used} of {usage.limit} used</span>
+        <span className="text-xs text-slate-500">Resets {usage.resetsAt}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [writingExamples, setWritingExamples] = useState<WritingExample[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
-  const [newSchedule, setNewSchedule] = useState({ date: "", time: "" });
   const [newWebsite, setNewWebsite] = useState("");
   const [newExample, setNewExample] = useState("");
   const [addingExample, setAddingExample] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generationSuccess, setGenerationSuccess] = useState<{ postCount: number } | null>(null);
+  const [usage, setUsage] = useState<UsageInfo | null>(null);
+  
+  // Greeting state
+  const [greeting, setGreeting] = useState<string>("");
+  const [greetingLoading, setGreetingLoading] = useState(true);
+
+  // Track if initial load is done
+  const initialLoadDone = useRef(false);
+
+  const saveSettingsToServer = useCallback(async () => {
+    const res = await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        postsPerBatch: settings.postsPerBatch,
+        postLength: settings.postLength,
+        emailAddress: settings.emailAddress,
+        sourceWebsites: settings.sourceWebsites,
+        audience: settings.audience,
+        customTopics: settings.customTopics,
+        aiInstructions: settings.aiInstructions,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to save");
+    }
+  }, [settings]);
+
+  const { debouncedSave, saveStatus } = useDebouncedSave(saveSettingsToServer, 400);
+
+  useEffect(() => {
+    if (initialLoadDone.current) {
+      debouncedSave();
+    }
+  }, [settings, debouncedSave]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -37,8 +298,38 @@ export default function SettingsPage() {
     if (session?.user) {
       loadSettings();
       loadWritingExamples();
+      loadGreeting();
+      loadUsage();
     }
   }, [session]);
+
+  const loadGreeting = async () => {
+    setGreetingLoading(true);
+    try {
+      const res = await fetch("/api/greeting");
+      if (res.ok) {
+        const data = await res.json();
+        setGreeting(data.greeting);
+      }
+    } catch (err) {
+      console.error("Failed to load greeting:", err);
+      setGreeting(`Welcome back!`);
+    } finally {
+      setGreetingLoading(false);
+    }
+  };
+
+  const loadUsage = async () => {
+    try {
+      const res = await fetch("/api/usage");
+      if (res.ok) {
+        const data = await res.json();
+        setUsage(data);
+      }
+    } catch (err) {
+      console.error("Failed to load usage:", err);
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -47,20 +338,24 @@ export default function SettingsPage() {
         const data = await res.json();
         setSettings({
           postsPerBatch: data.postsPerBatch,
-          batchCount: data.batchCount,
+          batchCount: 1,
           postLength: data.postLength,
           emailAddress: data.emailAddress,
           sourceWebsites: data.sourceWebsites,
           audience: data.audience || "young-professionals",
           customTopics: data.customTopics || [],
-          schedules: data.schedules,
+          schedules: [],
           writingStyle: data.writingStyle || "",
+          aiInstructions: data.aiInstructions || "",
         });
       }
     } catch (err) {
       console.error("Failed to load settings:", err);
     } finally {
       setLoading(false);
+      setTimeout(() => {
+        initialLoadDone.current = true;
+      }, 100);
     }
   };
 
@@ -74,58 +369,6 @@ export default function SettingsPage() {
     } catch (err) {
       console.error("Failed to load writing examples:", err);
     }
-  };
-
-  const saveSettings = async () => {
-    setSaving(true);
-    setError("");
-    
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          postsPerBatch: settings.postsPerBatch,
-          batchCount: settings.batchCount,
-          postLength: settings.postLength,
-          emailAddress: settings.emailAddress,
-          sourceWebsites: settings.sourceWebsites,
-          audience: settings.audience,
-          customTopics: settings.customTopics,
-          schedules: settings.schedules,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to save");
-      }
-
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (err) {
-      setError("Failed to save settings. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addSchedule = () => {
-    if (!newSchedule.date || !newSchedule.time) return;
-    const schedule: BatchSchedule = {
-      id: crypto.randomUUID(),
-      date: newSchedule.date,
-      time: newSchedule.time,
-      enabled: true,
-    };
-    setSettings({ ...settings, schedules: [...settings.schedules, schedule] });
-    setNewSchedule({ date: "", time: "" });
-  };
-
-  const removeSchedule = (id: string) => {
-    setSettings({
-      ...settings,
-      schedules: settings.schedules.filter((s) => s.id !== id),
-    });
   };
 
   const addWebsite = () => {
@@ -183,6 +426,50 @@ export default function SettingsPage() {
     }
   };
 
+  const handleGenerateNow = async () => {
+    if (usage && usage.remaining < settings.postsPerBatch) {
+      setError(`You can only generate ${usage.remaining} more posts this week. Reduce the count or wait for your limit to reset.`);
+      return;
+    }
+    
+    setGenerating(true);
+    setError("");
+    setGenerationSuccess(null);
+    
+    try {
+      const res = await fetch("/api/batch/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          count: settings.postsPerBatch,
+          sendEmail: false,
+          baseUrl: window.location.origin,
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to generate");
+      }
+      
+      setGenerationSuccess({
+        postCount: data.posts?.length || 0,
+      });
+      
+      // Refresh usage after generation
+      loadUsage();
+      
+      setTimeout(() => {
+        router.push("/posts");
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message || "Failed to generate posts. Please try again.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
@@ -195,22 +482,111 @@ export default function SettingsPage() {
     return null;
   }
 
+  const canGenerate = usage ? usage.remaining >= settings.postsPerBatch : true;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="max-w-3xl mx-auto px-6 py-12">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white">Settings</h1>
-            <p className="text-slate-400 mt-1">Configure your content generation preferences</p>
+            <h1 className="text-3xl font-bold text-white mb-3">LinkedIn Content Generator</h1>
+            {!greetingLoading && greeting && (
+              <p className="text-lg text-blue-400 font-medium">
+                <TypeWriter text={greeting} speed={25} />
+              </p>
+            )}
           </div>
-          <Link
-            href="/"
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-          >
-            ← Back
-          </Link>
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <Link
+              href="/posts"
+              className="flex items-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors whitespace-nowrap"
+            >
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              My Posts
+            </Link>
+            <button
+              onClick={() => signOut()}
+              className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors whitespace-nowrap"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
+
+        {/* Usage Meter */}
+        {usage && (
+          <div className="mb-6">
+            <UsageMeter usage={usage} />
+          </div>
+        )}
+
+        {/* Generate Card */}
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 shadow-lg mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Generate Posts</h2>
+              <p className="text-blue-100/80 text-sm">
+                Create {settings.postsPerBatch} {settings.postsPerBatch === 1 ? 'post' : 'posts'} instantly
+              </p>
+            </div>
+          </div>
+          
+          <button
+            onClick={handleGenerateNow}
+            disabled={generating || !canGenerate}
+            className="w-full py-3 bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            {generating ? (
+              <>
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Generating...
+              </>
+            ) : !canGenerate ? (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m4-6a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Weekly Limit Reached
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Generate Posts
+              </>
+            )}
+          </button>
+          
+          {!canGenerate && usage && (
+            <p className="text-blue-200/70 text-sm text-center mt-3">
+              You have {usage.remaining} posts remaining. Reduce count or wait until {usage.resetsAt}.
+            </p>
+          )}
+        </div>
+
+        {/* Success Message */}
+        {generationSuccess && (
+          <div className="bg-green-500/10 border border-green-500/50 text-green-400 px-4 py-3 rounded-xl text-sm mb-6 flex items-center gap-3">
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span>
+              Generated {generationSuccess.postCount} posts! Redirecting...
+            </span>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl text-sm mb-6">
@@ -218,116 +594,19 @@ export default function SettingsPage() {
           </div>
         )}
 
+        <h2 className="text-xl font-bold text-white mb-6">Settings</h2>
+
         <div className="space-y-8">
-          {/* Batch Settings */}
+          {/* Generation Settings */}
           <section className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">Batch Settings</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">Generation Settings</h2>
             
-            <div className="space-y-6">
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <label className="text-sm font-medium text-slate-300">
-                    Posts per batch
-                  </label>
-                  <span className="text-2xl font-bold text-white">{settings.postsPerBatch}</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={settings.postsPerBatch}
-                  onChange={(e) => setSettings({ ...settings, postsPerBatch: Number(e.target.value) })}
-                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-                <div className="flex justify-between text-xs text-slate-500 mt-1">
-                  <span>1</span>
-                  <span>5</span>
-                  <span>10</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-slate-300 block mb-3">
-                  Batches per schedule
-                </label>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setSettings({ ...settings, batchCount: 1 })}
-                    className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
-                      settings.batchCount === 1
-                        ? "bg-blue-600 text-white"
-                        : "bg-slate-900/50 text-slate-400 border border-slate-600 hover:border-slate-500"
-                    }`}
-                  >
-                    1 Batch
-                  </button>
-                  <button
-                    onClick={() => setSettings({ ...settings, batchCount: 2 })}
-                    className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
-                      settings.batchCount === 2
-                        ? "bg-blue-600 text-white"
-                        : "bg-slate-900/50 text-slate-400 border border-slate-600 hover:border-slate-500"
-                    }`}
-                  >
-                    2 Batches
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Schedule */}
-          <section className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">Schedule</h2>
-            <p className="text-slate-400 text-sm mb-4">Set specific dates and times for batch generation</p>
-
-            {/* Existing schedules */}
-            {settings.schedules.length > 0 && (
-              <div className="space-y-2 mb-4">
-                {settings.schedules.map((schedule) => (
-                  <div
-                    key={schedule.id}
-                    className="flex items-center justify-between bg-slate-900/30 px-4 py-3 rounded-xl"
-                  >
-                    <div className="text-slate-200">
-                      <span className="font-medium">{new Date(schedule.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>
-                      <span className="text-slate-400 mx-2">at</span>
-                      <span className="font-medium">{schedule.time}</span>
-                    </div>
-                    <button
-                      onClick={() => removeSchedule(schedule.id)}
-                      className="text-red-400 hover:text-red-300 transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Add new schedule */}
-            <div className="flex gap-3">
-              <input
-                type="date"
-                value={newSchedule.date}
-                onChange={(e) => setNewSchedule({ ...newSchedule, date: e.target.value })}
-                className="flex-1 px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="time"
-                value={newSchedule.time}
-                onChange={(e) => setNewSchedule({ ...newSchedule, time: e.target.value })}
-                className="w-32 px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={addSchedule}
-                className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
-              >
-                Add
-              </button>
-            </div>
+            <SegmentedControl
+              value={settings.postsPerBatch}
+              onChange={(value) => setSettings({ ...settings, postsPerBatch: value })}
+              options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+              label="Posts to generate"
+            />
           </section>
 
           {/* Source Websites */}
@@ -335,7 +614,6 @@ export default function SettingsPage() {
             <h2 className="text-xl font-semibold text-white mb-4">Source Websites</h2>
             <p className="text-slate-400 text-sm mb-4">Websites to pull topics and inspiration from</p>
 
-            {/* Existing websites */}
             {settings.sourceWebsites.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
                 {settings.sourceWebsites.map((url) => (
@@ -357,7 +635,6 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Suggested sources */}
             <div className="mb-4">
               <p className="text-slate-500 text-xs mb-2">Popular financial news sources:</p>
               <div className="flex flex-wrap gap-2">
@@ -368,9 +645,7 @@ export default function SettingsPage() {
                   { name: "Barchart", url: "https://www.barchart.com" },
                   { name: "MarketWatch", url: "https://www.marketwatch.com" },
                   { name: "Bloomberg", url: "https://www.bloomberg.com" },
-                  { name: "Reuters", url: "https://www.reuters.com" },
                   { name: "Investopedia", url: "https://www.investopedia.com" },
-                  { name: "Financial Times", url: "https://www.ft.com" },
                   { name: "The Motley Fool", url: "https://www.fool.com" },
                 ].filter(s => !settings.sourceWebsites.includes(s.url)).map((source) => (
                   <button
@@ -387,7 +662,6 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Add new website */}
             <div className="flex gap-3">
               <input
                 type="text"
@@ -431,7 +705,6 @@ export default function SettingsPage() {
               ))}
             </div>
 
-            {/* Show topics for selected audience */}
             {settings.audience && settings.audience !== "custom" && (
               <div className="bg-slate-900/30 rounded-xl p-4">
                 <p className="text-slate-400 text-xs mb-2">
@@ -458,40 +731,52 @@ export default function SettingsPage() {
           <section className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
             <h2 className="text-xl font-semibold text-white mb-4">Post Preferences</h2>
 
-            <div className="space-y-6">
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <label className="text-sm font-medium text-slate-300">
-                    Preferred post length
-                  </label>
-                  <span className="text-lg font-bold text-white capitalize">
-                    {settings.postLength} 
-                    <span className="text-sm font-normal text-slate-400 ml-1">
-                      (~{settings.postLength === "short" ? "100" : settings.postLength === "medium" ? "200" : "300"} words)
-                    </span>
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <label className="text-sm font-medium text-slate-300">
+                  Preferred post length
+                </label>
+                <span className="text-lg font-bold text-white capitalize">
+                  {settings.postLength} 
+                  <span className="text-sm font-normal text-slate-400 ml-1">
+                    (~{settings.postLength === "short" ? "100" : settings.postLength === "medium" ? "200" : "300"} words)
                   </span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="2"
-                  value={settings.postLength === "short" ? 0 : settings.postLength === "medium" ? 1 : 2}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    setSettings({ 
-                      ...settings, 
-                      postLength: val === 0 ? "short" : val === 1 ? "medium" : "long" 
-                    });
-                  }}
-                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-                <div className="flex justify-between text-xs text-slate-500 mt-1">
-                  <span>Short</span>
-                  <span>Medium</span>
-                  <span>Long</span>
-                </div>
+                </span>
+              </div>
+              <div className="flex gap-2 bg-slate-900/50 p-1 rounded-xl">
+                {(['short', 'medium', 'long'] as const).map((length) => (
+                  <button
+                    key={length}
+                    onClick={() => setSettings({ ...settings, postLength: length })}
+                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all capitalize ${
+                      settings.postLength === length
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                    }`}
+                  >
+                    {length}
+                  </button>
+                ))}
               </div>
             </div>
+          </section>
+
+          {/* AI Instructions */}
+          <section className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+            <h2 className="text-xl font-semibold text-white mb-4">AI Instructions</h2>
+            <p className="text-slate-400 text-sm mb-4">
+              Custom rules for the AI to follow when generating posts
+            </p>
+
+            <textarea
+              value={settings.aiInstructions}
+              onChange={(e) => setSettings({ ...settings, aiInstructions: e.target.value })}
+              placeholder="Examples:&#10;• Never use emojis&#10;• Always end with a question&#10;• Keep a professional tone&#10;• Don't use buzzwords like 'synergy'"
+              className="w-full h-32 px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+            <p className="text-slate-500 text-xs mt-2">
+              These instructions will be applied to every post generated
+            </p>
           </section>
 
           {/* Writing Examples */}
@@ -501,7 +786,6 @@ export default function SettingsPage() {
               Add examples of your writing style. The AI will learn from these to match your voice.
             </p>
 
-            {/* Existing examples */}
             {writingExamples.length > 0 && (
               <div className="space-y-3 mb-4">
                 {writingExamples.map((example) => (
@@ -530,7 +814,6 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Add new example */}
             <div className="space-y-3">
               <textarea
                 value={newExample}
@@ -548,13 +831,14 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* Delivery */}
+          {/* Email Delivery */}
           <section className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">Delivery</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">Email Notifications</h2>
+            <p className="text-slate-400 text-sm mb-4">Receive your generated posts via email</p>
 
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Email address for summaries
+                Email address
               </label>
               <input
                 type="email"
@@ -565,34 +849,10 @@ export default function SettingsPage() {
               />
             </div>
           </section>
-
-          {/* Save Button */}
-          <button
-            onClick={saveSettings}
-            disabled={saving}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-          >
-            {saving ? (
-              <>
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Saving...
-              </>
-            ) : saved ? (
-              <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Saved!
-              </>
-            ) : (
-              "Save Settings"
-            )}
-          </button>
         </div>
       </div>
+
+      <SaveIndicator status={saveStatus} />
     </div>
   );
 }

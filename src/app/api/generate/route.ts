@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { articlesToPromptContext, CuratedArticle } from "@/lib/curation";
 
 const SYSTEM_PROMPT = `You are an expert LinkedIn content creator. You write engaging, authentic posts that resonate with professional audiences.
 
@@ -42,10 +43,16 @@ const getContentTypeInstructions = (contentType: string) => {
 
 export async function POST(request: NextRequest) {
   try {
-    const { topic, tone, contentType, writingStyle, postLength } = await request.json();
+    const { topic, tone, contentType, writingStyle, postLength, curatedArticles } = await request.json();
 
     if (!topic) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 });
+    }
+
+    // Build article context if provided
+    let articleContext = "";
+    if (curatedArticles && Array.isArray(curatedArticles) && curatedArticles.length > 0) {
+      articleContext = articlesToPromptContext(curatedArticles as CuratedArticle[]);
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -69,6 +76,10 @@ export async function POST(request: NextRequest) {
       ? `\n\nMatch this writing style:\n${writingStyle}`
       : "";
 
+    const articleNote = articleContext
+      ? `\n\n${articleContext}\n\nUse insights from these articles to inform your post. You may reference specific articles naturally (e.g., "A recent article from [source] highlighted...") when it adds value.`
+      : "";
+
     const userPrompt = `${getToneInstructions(tone)}
 
 ${getContentTypeInstructions(contentType)}
@@ -76,7 +87,7 @@ ${getContentTypeInstructions(contentType)}
 ${getLengthInstructions(postLength)}
 
 Target audience: New York Life financial advisors
-${styleNote}
+${styleNote}${articleNote}
 
 Topic: ${topic}`;
 

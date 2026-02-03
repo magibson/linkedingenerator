@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     // Get user info
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { username: true },
+      select: { firstName: true, email: true },
     });
 
     if (type === "single" && postId) {
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       }
 
       const html = generateSinglePostEmailHtml({
-        userName: user?.username || "there",
+        userName: user?.firstName || user?.email?.split("@")[0] || "there",
         post: {
           id: post.id,
           topic: post.topic,
@@ -159,7 +159,7 @@ What are you learning this week?`,
           ];
 
     const html = generateDigestEmailHtml({
-      userName: user?.username || "there",
+      userName: user?.firstName || user?.email?.split("@")[0] || "there",
       posts: postsForEmail,
       batchId: batchId || undefined,
       baseUrl,

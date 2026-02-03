@@ -3,18 +3,25 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendDigestEmail, isEmailConfigured, PostForEmail } from "@/lib/email";
+import { curateArticles, articlesToPromptContext, CuratedArticle, BACKUP_SOURCES } from "@/lib/curation";
+import { AudienceType } from "@/lib/types";
+import { callGemini } from "@/lib/gemini";
 
-const SYSTEM_PROMPT = `You are an expert LinkedIn content creator. You write engaging, authentic posts that resonate with professional audiences.
+const SYSTEM_PROMPT = `You are a financial advisor sharing valuable articles with your LinkedIn network. Your posts share interesting articles and add your professional perspective.
 
-Your posts:
-- Start with a strong hook that stops the scroll
-- Use short paragraphs and line breaks for readability
-- Include relevant insights and value
-- End with a call to action or thought-provoking question
-- Feel genuine, not salesy or generic
-- Use appropriate emojis sparingly (1-3 max)
+Your posts should:
+- Open with a hook about the article's key insight or why it matters
+- Briefly summarize what the article covers (1-2 sentences)
+- Add YOUR professional take or perspective on the topic
+- End with a question to spark discussion
+- Feel like genuine sharing, not promotion
+- Use appropriate emojis sparingly (1-2 max)
 
-Never use hashtags unless specifically asked. Focus on substance over fluff.`;
+IMPORTANT: 
+- The article link will be added separately, so DON'T include the URL in your text
+- Focus on providing value and your unique perspective
+- Never use hashtags
+- Write as someone sharing something helpful they found, not selling`;
 
 const getToneInstructions = (tone: string) => {
   switch (tone) {
@@ -58,67 +65,67 @@ const AUTO_TOPICS = [
 
 const TONES = ["professional", "thought-leader", "storytelling", "casual"];
 
+interface ArticleForPost {
+  title: string;
+  url: string;
+  summary: string;
+  source: string;
+}
+
 async function generateSinglePost(
-  topic: string,
+  article: ArticleForPost,
   tone: string,
   postLength: string,
-  writingStyle: string
+  writingStyle: string,
+  aiInstructions: string
 ): Promise<{ topic: string; tone: string; content: string } | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-
   const styleNote = writingStyle
     ? `\n\nMatch this writing style:\n${writingStyle}`
     : "";
 
+  const instructionsNote = aiInstructions
+    ? `\n\nIMPORTANT - Follow these custom instructions:\n${aiInstructions}`
+    : "";
+
+  const articleContext = `
+ARTICLE TO SHARE:
+Title: ${article.title}
+Source: ${article.source}
+Summary: ${article.summary}
+
+Write a LinkedIn post sharing this article with your professional network. Your post should:
+1. Hook the reader with why this article matters
+2. Briefly mention what the article covers
+3. Add your perspective as a financial professional
+4. Ask a question to encourage comments
+
+Remember: The article link will be added after your text automatically. Do NOT write the URL.`;
+
   const userPrompt = `${getToneInstructions(tone)}
 
-Write a complete LinkedIn post (150-300 words). Include a hook, body, and conclusion.
-
 ${getLengthInstructions(postLength)}
-
-Target audience: New York Life financial advisors
 ${styleNote}
+${instructionsNote}
 
-Topic: ${topic}`;
+${articleContext}`;
 
   try {
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gemini-2.0-flash",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.8,
-          max_tokens: 1000,
-        }),
-      }
+    const content = await callGemini(
+      [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      { temperature: 0.8, maxRetries: 3, baseDelayMs: 3000 }
     );
 
-    if (!response.ok) {
-      console.error("Gemini API error:", await response.text());
-      return null;
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) return null;
-
-    return { topic, tone, content };
+    return { topic: article.title, tone, content };
   } catch (err) {
     console.error("Generation error:", err);
     return null;
   }
 }
+
+const WEEKLY_LIMIT = 20; // Posts per user per week
 
 export async function POST(request: NextRequest) {
   try {
@@ -130,11 +137,46 @@ export async function POST(request: NextRequest) {
 
     const userId = (session.user as any).id;
     const body = await request.json();
+    
+    // Check weekly usage limit
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - dayOfWeek);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const postsThisWeek = await prisma.post.count({
+      where: {
+        userId,
+        createdAt: {
+          gte: startOfWeek,
+        },
+      },
+    });
+
+    const requestedCount = body.count || 5;
+    const remaining = WEEKLY_LIMIT - postsThisWeek;
+
+    if (remaining <= 0) {
+      return NextResponse.json(
+        { error: "Weekly limit reached. You can generate more posts next week." },
+        { status: 429 }
+      );
+    }
+
+    if (requestedCount > remaining) {
+      return NextResponse.json(
+        { error: `You can only generate ${remaining} more posts this week. Please reduce the count.` },
+        { status: 429 }
+      );
+    }
     const { 
       topics, // Optional array of specific topics
       count, // Optional override for number of posts
       sendEmail = true, // Whether to send email after generation
       baseUrl = "", // Base URL for email links
+      useCuratedArticles = true, // Whether to fetch and use curated articles
+      curatedArticles, // Optional pre-fetched articles to use
     } = body;
 
     // Get user settings
@@ -158,6 +200,69 @@ export async function POST(request: NextRequest) {
 
     const postsToGenerate = count || settings.postsPerBatch;
     const postLength = settings.postLength;
+    const sourceWebsites = JSON.parse(settings.sourceWebsites || "[]") as string[];
+    const customTopics = JSON.parse(settings.customTopics || "[]") as string[];
+    const audience = (settings.audience || "young-professionals") as AudienceType;
+    const aiInstructions = settings.aiInstructions || "";
+
+    // Fetch curated articles from source websites
+    let fetchedArticles: CuratedArticle[] = [];
+    
+    if (useCuratedArticles && (curatedArticles || sourceWebsites.length > 0)) {
+      try {
+        if (curatedArticles && Array.isArray(curatedArticles)) {
+          // Use pre-fetched articles
+          fetchedArticles = curatedArticles;
+        } else if (sourceWebsites.length > 0) {
+          // Fetch fresh articles from user's sources
+          const curationResult = await curateArticles(sourceWebsites, audience, customTopics, {
+            maxDays: 14, // 2 weeks for more options
+            maxTotalArticles: postsToGenerate + 5, // Fetch a few extra
+            maxArticlesPerSource: 10,
+          });
+          fetchedArticles = curationResult.articles;
+        }
+
+        // If we don't have enough articles, fetch from backup sources
+        if (fetchedArticles.length < postsToGenerate) {
+          console.log(`Only got ${fetchedArticles.length} articles, need ${postsToGenerate}. Fetching from backup sources...`);
+          
+          // Filter out backup sources the user already has
+          const userDomains = new Set(sourceWebsites.map(url => {
+            try {
+              return new URL(url.startsWith("http") ? url : "https://" + url).hostname.replace("www.", "");
+            } catch {
+              return url;
+            }
+          }));
+          
+          const backupSourcesToUse = BACKUP_SOURCES.filter(url => {
+            const domain = new URL(url).hostname.replace("www.", "");
+            return !userDomains.has(domain);
+          });
+          
+          if (backupSourcesToUse.length > 0) {
+            const needed = postsToGenerate - fetchedArticles.length;
+            const backupResult = await curateArticles(backupSourcesToUse, audience, customTopics, {
+              maxDays: 14,
+              maxTotalArticles: needed + 3,
+              maxArticlesPerSource: Math.ceil(needed / backupSourcesToUse.length) + 2,
+            });
+            
+            // Append backup articles (user's sources stay prioritized at top)
+            const existingUrls = new Set(fetchedArticles.map(a => a.url));
+            const newBackupArticles = backupResult.articles.filter(a => !existingUrls.has(a.url));
+            fetchedArticles = [...fetchedArticles, ...newBackupArticles];
+            
+            console.log(`After backup sources: ${fetchedArticles.length} total articles`);
+          }
+        }
+        
+      } catch (e) {
+        console.warn("Failed to fetch curated articles:", e);
+        // Continue without articles
+      }
+    }
 
     // Create a batch record
     const batch = await prisma.batch.create({
@@ -168,26 +273,44 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Determine topics
-    let topicsToUse: string[];
-    if (topics && Array.isArray(topics) && topics.length > 0) {
-      topicsToUse = topics.slice(0, postsToGenerate);
-    } else {
-      // Randomly select topics from auto topics
-      const shuffled = [...AUTO_TOPICS].sort(() => Math.random() - 0.5);
-      topicsToUse = shuffled.slice(0, postsToGenerate);
+    // We need articles to generate posts about
+    if (fetchedArticles.length === 0) {
+      await prisma.batch.update({
+        where: { id: batch.id },
+        data: { status: "complete" },
+      });
+      return NextResponse.json(
+        { error: "No articles found from your source websites. Try adding more sources or adjusting your audience settings." },
+        { status: 400 }
+      );
     }
 
-    // Generate posts
-    const generatedPosts: { topic: string; tone: string; content: string }[] = [];
+    // Generate posts - one per article
+    const articlesToUse = fetchedArticles.slice(0, postsToGenerate);
+    const generatedPosts: { topic: string; tone: string; content: string; sourceArticle: CuratedArticle }[] = [];
     
-    for (let i = 0; i < topicsToUse.length; i++) {
-      const topic = topicsToUse[i];
+    for (let i = 0; i < articlesToUse.length; i++) {
+      const article = articlesToUse[i];
       const tone = TONES[i % TONES.length]; // Rotate through tones
       
-      const result = await generateSinglePost(topic, tone, postLength, writingStyle);
+      const result = await generateSinglePost(
+        {
+          title: article.title,
+          url: article.url,
+          summary: article.summary,
+          source: article.source,
+        },
+        tone,
+        postLength,
+        writingStyle,
+        aiInstructions
+      );
+      
       if (result) {
-        generatedPosts.push(result);
+        generatedPosts.push({
+          ...result,
+          sourceArticle: article,
+        });
       }
     }
 
@@ -202,21 +325,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save posts to database
+    // Save posts to database (with source article info)
+    // Append article URL to content so it's included when copying
     const savedPosts = await Promise.all(
-      generatedPosts.map((post) =>
-        prisma.post.create({
+      generatedPosts.map((post) => {
+        const contentWithLink = `${post.content}\n\n${post.sourceArticle.url}`;
+        return prisma.post.create({
           data: {
             userId,
             batchId: batch.id,
             topic: post.topic,
             tone: post.tone,
             contentType: "post",
-            content: post.content,
+            content: contentWithLink,
             status: "draft",
+            sourceArticleUrl: post.sourceArticle.url,
+            sourceArticleTitle: post.sourceArticle.title,
+            sourceArticleImage: post.sourceArticle.imageUrl,
+            audience: audience,
           },
-        })
-      )
+        });
+      })
     );
 
     // Update batch status
@@ -233,7 +362,7 @@ export async function POST(request: NextRequest) {
     if (sendEmail && settings.emailAddress && isEmailConfigured()) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { username: true },
+        select: { firstName: true, email: true },
       });
 
       const postsForEmail: PostForEmail[] = savedPosts.map((post) => ({
@@ -246,7 +375,7 @@ export async function POST(request: NextRequest) {
 
       emailResult = await sendDigestEmail({
         to: settings.emailAddress,
-        userName: user?.username || "there",
+        userName: user?.firstName || user?.email?.split("@")[0] || "there",
         posts: postsForEmail,
         batchId: batch.id,
         baseUrl,
@@ -269,12 +398,18 @@ export async function POST(request: NextRequest) {
         id: batch.id,
         status: emailResult?.success ? "sent" : "complete",
       },
-      posts: savedPosts.map((p) => ({
+      posts: savedPosts.map((p, i) => ({
         id: p.id,
         topic: p.topic,
         tone: p.tone,
         preview: p.content.substring(0, 100) + "...",
+        sourceArticle: generatedPosts[i]?.sourceArticle || null,
       })),
+      curation: {
+        articlesUsed: fetchedArticles.length,
+        sources: [...new Set(fetchedArticles.map(a => a.source))],
+      },
+      audience,
       email: emailResult
         ? {
             sent: emailResult.success,
